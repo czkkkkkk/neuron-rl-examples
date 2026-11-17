@@ -1,0 +1,108 @@
+defaults:
+  - ppo_trainer
+  - override model_engine: torchtitan
+  - _self_
+
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+data:
+  train_files: ${oc.env:DATA_DIR}/train.parquet
+  val_files: ${oc.env:DATA_DIR}/test.parquet
+  train_max_samples: 32
+  val_max_samples: 8
+  train_batch_size: 4
+  max_prompt_length: 512
+  max_response_length: 512
+  filter_overlong_prompts: true
+  dataloader_num_workers: 0
+  apply_chat_template_kwargs:
+    enable_thinking: false
+
+algorithm:
+  adv_estimator: grpo
+
+actor_rollout_ref:
+  hybrid_engine: false
+  model:
+    path: ${oc.env:MODEL_DIR}
+    use_remove_padding: false
+    use_fused_kernels: false
+  actor:
+    ppo_mini_batch_size: 4
+    ppo_micro_batch_size_per_gpu: 1
+    use_dynamic_bsz: false
+    use_kl_loss: true
+    kl_loss_coef: 0.001
+    optim:
+      lr: 1.0e-6
+    torchtitan: &neuron_engine
+      _target_: verl_hardware_plugin.accelerators.neuron.engines.config.NeuronTorchtitanEngineConfig
+      attn_type: sdpa
+      spmd_backend: default
+      dtype: bfloat16
+      use_remove_padding: false
+      activation_checkpoint: none
+      max_seq_len: 1024
+      tensor_parallel_size: 2
+      data_parallel_size: 1
+      data_parallel_replicate_size: 1
+      data_parallel_shard_size: 1
+      param_offload: false
+      optimizer_offload: false
+  ref:
+    log_prob_micro_batch_size_per_gpu: 1
+    log_prob_use_dynamic_bsz: false
+    torchtitan:
+      <<: *neuron_engine
+      forward_only: true
+  rollout:
+    name: vllm
+    nnodes: 1
+    n_gpus_per_node: 2
+    tensor_model_parallel_size: 2
+    dtype: bfloat16
+    load_format: auto
+    n: 2
+    temperature: 1.0
+    top_k: -1
+    top_p: 1.0
+    max_model_len: 1024
+    max_num_batched_tokens: 1024
+    max_num_seqs: 4
+    calculate_log_probs: true
+    log_prob_micro_batch_size_per_gpu: 1
+    log_prob_use_dynamic_bsz: false
+    enable_sleep_mode: false
+    free_cache_engine: false
+    enable_prefix_caching: false
+    enable_chunked_prefill: false
+    agent:
+      num_workers: 1
+    checkpoint_engine:
+      backend: neuron_nixl
+      custom_backend_module: verl_hardware_plugin.accelerators.neuron.weight_sync.checkpoint_engine
+      update_weights_bucket_megabytes: 64
+
+reward:
+  num_workers: 1
+
+trainer:
+  device: neuron
+  use_v1: true
+  nnodes: 1
+  n_gpus_per_node: 2
+  total_epochs: 1
+  total_training_steps: 2
+  project_name: neuron_gsm8k
+  experiment_name: qwen3_0_6b_smoke
+  logger: [console]
+  val_before_train: false
+  test_freq: -1
+  save_freq: -1
+  resume_mode: disable
+  v1:
+    trainer_mode: separate_async
+    separate_async:
+      parameter_sync_step: 1

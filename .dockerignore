@@ -1,0 +1,8 @@
+**
+!Dockerfile
+!docker/
+!docker/**
+!gsm8k/
+!gsm8k/config/
+!gsm8k/config/neuron_gsm8k.yaml
+!gsm8k/prepare_gsm8k.py

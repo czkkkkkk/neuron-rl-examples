@@ -1,0 +1,6 @@
+gsm8k/Qwen3-0.6B/
+gsm8k/data/
+gsm8k/runs/
+setup/
+__pycache__/
+.docker-data/
