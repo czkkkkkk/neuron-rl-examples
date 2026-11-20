@@ -1,0 +1,51 @@
+# The NKIRL `profile_kernel` tool for verl's ToolAgentLoop
+# (actor_rollout_ref.rollout.multi_turn.tool_config_path).
+#
+# The module is resolved by dotted path on every agent-loop worker, so the neuron-rl-examples root
+# (/workspace in the container) must be on PYTHONPATH there. The launcher forwards it through
+# ray_kwargs.ray_init.runtime_env.env_vars. The tool's scoring core is vendored in this package.
+#
+# TWO NAMES HERE ARE CONTRACTS WITH THE REWARD, NOT PREFERENCES:
+#
+#   * the function name must be `profile_kernel`, and
+#   * the parameter name must be `nki_code`,
+#
+# because with multi_turn.format=qwen3_coder verl renders a call as
+#   <tool_call><function=profile_kernel><parameter=nki_code>…</parameter></function></tool_call>
+# and NKIRL's reward re-reads the decoded response with `<parameter=nki_code>(.*?)</parameter>`.
+# Change either, or set format=hermes (which renders arguments as JSON), and the reward finds no
+# verified kernels: KERNEL_EXTRACT_STRATEGY=best_speedup then silently degrades to "the last block".
+tools:
+  - class_name: "nkirl.nkirl_tool.ProfileKernelTool"
+    config:
+      type: native
+      # Concurrent profile requests per agent-loop worker process. This bounds how many rollouts in
+      # this worker can be waiting on the profiler at once; the pool's core count bounds how many
+      # actually run.
+      num_workers: 32
+      # Append the profiler metric block (engine utilisation, DMA, HBM bytes, MFU/MBU, ...) to the
+      # observation. This is what the model is meant to reason from when deciding what to optimise
+      # next; turning it off leaves only the latency number.
+      include_metrics: true
+      # Characters of observation returned before truncation. The agent loop truncates again to
+      # rollout.multi_turn.max_tool_response_length, which is the budget that actually matters for
+      # the static frame.
+      max_response_chars: 6000
+    tool_schema:
+      type: "function"
+      function:
+        name: "profile_kernel"
+        description: >-
+          Compile, numerically verify and benchmark an NKI kernel on AWS Trainium, and return its
+          on-device latency, its speedup over the original kernel, and profiler metrics (engine
+          utilisation, DMA activity, HBM traffic, arithmetic intensity). Call it on each kernel you
+          write to find out whether it is correct and whether it is actually faster.
+        parameters:
+          type: "object"
+          properties:
+            nki_code:
+              type: "string"
+              description: >-
+                The complete NKI kernel source: the `kernel` function decorated with @nki.jit, plus
+                any helper functions it needs. Do not include the benchmark or reference code.
+          required: ["nki_code"]
