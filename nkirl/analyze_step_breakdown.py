@@ -5,13 +5,15 @@
 
     python analyze_step_breakdown.py <RUN_DIR> [--skip-steps 1] [--out <RUN_DIR>/report]
 
-Reads what slurm/sbatch_container.sh and nkirl/run_nkirl.sh leave in RUN_DIR:
+Reads what nkirl/run_nkirl.sh, and optionally your cluster launcher, leave in RUN_DIR (missing inputs
+are skipped):
 
 * ``metrics.jsonl``: verl's file logger, one line per step (``timing_s/*``, ``agent_loop/*``, lengths).
-* ``telemetry/metrics_stamps.txt``: the wall-clock time each metrics line appeared, so each step's
-  phases can be placed on the clock (the phases of a step run one after another).
+* ``telemetry/metrics_stamps.txt`` (from the launcher): ``<epoch> <line prefix>`` for each metrics line,
+  the wall-clock time it appeared, so each step's phases can be placed on the clock.
 * ``profiler_trace/*.jsonl``: one line per profiler request and per batch (profiler_trace.py).
-* ``telemetry/neuron_monitor_<node>.jsonl`` and ``telemetry/host_<node>.txt``.
+* ``telemetry/neuron_monitor_<node>.jsonl`` (from the launcher): neuron-monitor JSON, each line prefixed
+  with its epoch; ``telemetry/host_<node>.txt``: ``<epoch> <used bytes> <available bytes> <load>``.
 * ``driver.log``: ``driver_start_epoch`` and ``profiler_version`` lines.
 
 Writes ``<out>.json`` (every number) and ``<out>.md`` (the tables). Steps in ``--skip-steps`` count
@@ -266,7 +268,7 @@ def generation_summary(gens: list[dict], windows: list[dict]) -> list[dict[str, 
 def load_monitor(run_dir: str, period_s: float = 10.0) -> dict[str, list[tuple[float, float, float]]]:
     """Per node: (time, mean NeuronCore utilization %, device memory used GB) samples.
 
-    A line is ``<epoch> <json>`` (slurm/sbatch_container.sh stamps each sample) or bare JSON from an
+    A line is ``<epoch> <json>`` (the launcher stamps each sample) or bare JSON from an
     older run, whose times are then derived backward from the file's mtime at ``period_s`` spacing.
     Every runtime reports the cores it sees; a core is counted once, at its highest reported value.
     """

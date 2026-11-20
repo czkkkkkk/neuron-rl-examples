@@ -183,7 +183,7 @@ def compute_score(
             # Passed through, not defaulted. The core only ever records `data_source` as metadata
             # (artifact JSON, infra-failure rows) and groups Pass@K by it, where an empty value is
             # deliberately skipped — so substituting a placeholder would invent a provenance label
-            # and a metrics bucket matching none of the dataset's real `nkibench_1`..`nkibench_5`.
+            # and a metrics bucket matching none of the dataset's real data sources.
             data_sources=[data_source],
             solution_strs=[solution_str or ""],
             ground_truths=[ground_truth],

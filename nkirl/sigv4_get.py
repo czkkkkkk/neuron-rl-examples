@@ -3,7 +3,7 @@
 # Licensed under the Apache License, Version 2.0.
 """Print the body of one SigV4-signed GET to a deployed profiler (service ``execute-api``).
 
-    python3 sigv4_get.py https://gru.dev.profiler.neuron-profile.aws.dev/version sa-east-1
+    python3 sigv4_get.py https://<profiler-endpoint>/version <region>
 
 Credentials come from the botocore default chain, as in NKIRL's reward core. Exit status 1 on any
 HTTP or credential error.

@@ -1,12 +1,9 @@
 # NKIRL with Qwen3-32B on 8 Trainium2 nodes: 1 actor node (64 cores, TorchTitan) and 7 rollout nodes
 # (56 vLLM-Neuron replicas at TP=8), with the v1 separate_async trainer and NIXL weight sync.
 #
-# The recipe settings match the earlier neuron-rl-core run that the profile report describes
-# (64 prompts x 8 samples, prompt 6,144 + response 10,240 tokens, 3 tool turns, GRPO, no KL), so the
-# two profiles can be compared. Differences are the engines, not the recipe:
+# Recipe: 64 prompts x 8 samples, prompt 6,144 + response 10,240 tokens, 3 tool turns, GRPO, no KL.
 #   * training: TorchTitan, TP=8 x SP x FSDP=8 (with the plugin's tp8_fsdp8 core order), full activation
-#     checkpointing, unfused q/k/v, Adam moments on the host outside the optimizer step (the old run:
-#     TP=4 x SP=4 x FSDP=4 with offload);
+#     checkpointing, unfused q/k/v, Adam moments on the host outside the optimizer step;
 #   * rollout: vLLM-Neuron through the plugin's server, with one token bucket of 16,384.
 defaults:
   - ppo_trainer
@@ -62,24 +59,14 @@ actor_rollout_ref:
       activation_checkpoint: full
       # prompt + response; a multiple of 512.
       max_seq_len: 16384
-      # TP=8 x FSDP=8 = the 64 cores of one node. TP=8 halves the per-token tensors of TP=4 (the 16k
-      # logits shard alone is 1.2 GB at TP=4), and TP=4 x FSDP=16 runs out of device memory. TP=8 needs
-      # VERL_NEURON_ACTOR_CORE_ORDER=tp8_fsdp8 (run_nkirl.sh sets it): with the default rank-to-core
-      # order, each FSDP group of TP=8 is one core on every other device, and runtime 2.35 cannot build
-      # its collectives ("ENC: no_hier no_mesh"). 8 KV heads cap TP at 8.
+      # TP=8 x FSDP=8 needs VERL_NEURON_ACTOR_CORE_ORDER=tp8_fsdp8 (set by run_nkirl.sh).
       tensor_parallel_size: 8
       data_parallel_size: 1
       data_parallel_replicate_size: 1
       data_parallel_shard_size: 8
       param_offload: false
-      # The Adam moments (3.8 GiB per NeuronCore) stay on the host except during the optimizer step;
-      # with them resident, the backward of the second mini-batch runs out of device memory.
       optimizer_offload: true
-      # Splits the activations between TP layers by 4, as SP=4 did in the old run; without it every
-      # TP rank holds the full 16k x 5120 activations of each layer.
       enable_sequence_parallel: true
-      # The fused wqkv state-dict hook gathers every layer's full wqkv to every rank on each
-      # state_dict() call: about 27 GB per NeuronCore for Qwen3-32B, more than the 24 GB a core has.
       fuse_qkv: false
   rollout:
     name: vllm
@@ -120,9 +107,7 @@ actor_rollout_ref:
       update_weights_bucket_megabytes: 512
       engine_kwargs:
         neuron_nixl:
-          # One receive RPC covers a whole sync. The first 8-node sync took 1 h 40 min (the export
-          # compiles one small graph per bucket offset), so allow 2 hours.
-          timeout_s: 7200
+          timeout_s: 7200  # covers a whole sync, including the first sync's graph compiles
 
 reward:
   custom_reward_function:

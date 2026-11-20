@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Run the NKIRL recipe inside the head node's container, on a Ray cluster that is already up.
 #
-#   RAY_ADDRESS=<head ip>:<port> RUN_DIR=/fsx/.../runs/<name> MODEL_DIR=... DATA_DIR=... \
+#   RAY_ADDRESS=<head ip>:<port> RUN_DIR=<shared run directory> MODEL_DIR=... DATA_DIR=... \
 #       bash /workspace/nkirl/run_nkirl.sh [hydra overrides...]
 #
-# slurm/sbatch_container.sh starts one container per node, joins them into one Ray cluster and calls
-# this script in the head container. It does what the plugin's scripts/accelerators/neuron/run_neuron.sh
-# does, except that it joins the existing multi-node cluster (run_neuron.sh refuses one, because it is
-# written for one host), and it forwards the NKIRL tool and reward settings to every Ray worker.
+# Start one container per node and join them into one Ray cluster first, with your cluster's launcher,
+# then call this script in the head container. RUN_DIR must be on storage that every node can read.
+# It does what the plugin's scripts/accelerators/neuron/run_neuron.sh does, except that it joins the
+# existing multi-node cluster (run_neuron.sh refuses one, because it is written for one host), and it
+# forwards the NKIRL tool and reward settings to every Ray worker.
 set -euo pipefail
 : "${RAY_ADDRESS:?set RAY_ADDRESS to the running cluster}"
 : "${RUN_DIR:?set RUN_DIR to a shared run directory}"
@@ -28,15 +29,12 @@ export VERL_PLATFORM=aws TORCH_DEVICE_BACKEND_AUTOLOAD=0 VLLM_PLUGINS="" NEURON_
 export NEURON_LOGICAL_NC_CONFIG=${NEURON_LOGICAL_NC_CONFIG:-2} OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
 : "${VERL_NEURON_PYTHON:?the image sets VERL_NEURON_PYTHON}"
 export NKI_COMPILE_CACHE_URL=${NKI_COMPILE_CACHE_URL:-/cache/nki}
-# The actor runs TP=8 x FSDP=8 (config/neuron_nkirl_qwen3_32b.yaml); this rank-to-core order is the one
-# whose TP=8 and FSDP=8 collectives runtime 2.35 builds and computes correctly (plugin runtime.py).
+# Required by the actor's TP=8 x FSDP=8 layout (see the plugin's runtime.py).
 export VERL_NEURON_ACTOR_CORE_ORDER=${VERL_NEURON_ACTOR_CORE_ORDER-tp8_fsdp8}
-# torch-neuronx eager graphs (NEFFs). The default, /tmp, is lost with the container.
+# Keep compiled graphs across containers; the default is /tmp.
 export TORCH_NEURONX_NEFF_CACHE_DIR=${TORCH_NEURONX_NEFF_CACHE_DIR:-/cache/neff}
 export TORCH_NEURONX_NEFF_LOCAL_CACHE_DIR=${TORCH_NEURONX_NEFF_LOCAL_CACHE_DIR:-/cache/neff_local}
-# The 64 actor ranks of a node share one cache: one rank compiles a graph and the others wait on its
-# lock. The first training step of Qwen3-32B compiles single graphs for more than the default 1,200 s;
-# a waiting rank then breaks the lock and compiles the same graph again (44 copies at once, job 2092).
+# Ranks waiting on a long compile break the default 1,200 s lock and compile the same graph again.
 export TORCH_NEURONX_NEFF_CACHE_LOCK_TIMEOUT=${TORCH_NEURONX_NEFF_CACHE_LOCK_TIMEOUT:-7200}
 export LD_LIBRARY_PATH="$(dirname "$VERL_NEURON_PYTHON")/../lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
