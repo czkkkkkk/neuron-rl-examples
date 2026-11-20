@@ -4,3 +4,6 @@ gsm8k/runs/
 setup/
 __pycache__/
 .docker-data/
+
+# Local Qwen3.8 checkpoint, dataset, compile caches and training runs
+/qwen38-work/

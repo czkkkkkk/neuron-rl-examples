@@ -38,6 +38,7 @@ installed inside the Docker image.
 | Example | Model | Method | What it demonstrates |
 | --- | --- | --- | --- |
 | [GSM8K](gsm8k/README.md) | Qwen3-0.6B | GRPO | Math reasoning with generation, rule-based rewards, training, and actor-to-rollout weight synchronization |
+| [Qwen3.8-27B on SDK 2.33.1](qwen3_8/README.md) | Qwen3.8-27B text | GRPO | Full 27B actor and four V2 rollout replicas on one Trn2; public source pins and an automated three-step check |
 
 The GSM8K guide includes a two-step smoke run to verify the environment and
 instructions for a longer run with evaluation.

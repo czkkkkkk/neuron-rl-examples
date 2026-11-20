@@ -1,0 +1,9 @@
+defaults:
+  - ppo_trainer
+  - qwen38_common
+  - override model_engine: torchtitan
+  - _self_
+
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
