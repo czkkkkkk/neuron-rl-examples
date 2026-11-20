@@ -1,0 +1,8 @@
+**
+!install.sh
+!prepare.sh
+!check_sdk.py
+!check_generation.py
+!run_grpo.sh
+!config/
+!config/*.yaml
