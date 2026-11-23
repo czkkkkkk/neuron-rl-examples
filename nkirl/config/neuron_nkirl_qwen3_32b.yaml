@@ -108,6 +108,7 @@ actor_rollout_ref:
       engine_kwargs:
         neuron_nixl:
           timeout_s: 7200  # covers a whole sync, including the first sync's graph compiles
+          whole_params: true
 
 reward:
   custom_reward_function:
