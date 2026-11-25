@@ -6,13 +6,15 @@ sources_dir=$(dirname "$examples_dir")
 image=${VERL_DEV_IMAGE:?Set VERL_DEV_IMAGE to your own image name, for example alice-neuron-rl:dev}
 # Docker image references can contain separators that container names cannot.
 container=${VERL_DEV_CONTAINER:-"${image//[!a-zA-Z0-9_.-]/-}"}
+device_count=${VERL_DEV_NEURON_DEVICE_COUNT:-2}
+[[ $device_count =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid Neuron device count' >&2; exit 1; }
 storage=${VERL_DEV_STORAGE:-"$examples_dir/.docker-data"}
 plugin_dir=${VERL_DEV_PLUGIN_DIR:-"$sources_dir/upstream-to-verl-hardware-plugin"}
 torchtitan_dir=${VERL_DEV_TORCHTITAN_DIR:-"$sources_dir/torchtitan-neuron"}
 vllm_dir=${VERL_DEV_VLLM_DIR:-"$sources_dir/vllm-neuron"}
 
 for repository in "$plugin_dir" "$torchtitan_dir" "$vllm_dir"; do
-    [[ -d "$repository/.git" && -f "$repository/pyproject.toml" ]] || {
+    [[ -e "$repository/.git" && -f "$repository/pyproject.toml" ]] || {
         echo "Expected a Git clone with pyproject.toml at $repository." >&2
         exit 1
     }
@@ -23,9 +25,40 @@ vllm_dir=$(cd "$vllm_dir" && pwd)
 mkdir -p "$storage"/{data,cache,runs}
 storage=$(cd "$storage" && pwd)
 
+# A linked worktree's gitfile points outside the source bind mount. Mirror the
+# common Git directory at the path resolved by Git inside the container.
+declare -A git_sources=()
+git_mounts=()
+add_worktree_metadata() {
+    local src=$1 dst=$2 gitdir common pointer pointer_file
+    [[ -f "$src/.git" ]] || return 0
+    gitdir=$(git -C "$src" rev-parse --absolute-git-dir)
+    common=$(git -C "$src" rev-parse --path-format=absolute --git-common-dir)
+    git_sources["$common"]=$common
+    if [[ $gitdir != "$common" && $gitdir != "$common/"* ]]; then
+        git_sources["$gitdir"]=$gitdir
+    fi
+    read -r pointer < "$src/.git"
+    if [[ ${pointer#gitdir: } != /* ]]; then
+        # A relative gitfile would resolve against the container's source path.
+        mkdir -p "$storage/worktree-gitfiles"
+        pointer_file="$storage/worktree-gitfiles/$(printf %s "$gitdir" | sha256sum | cut -d ' ' -f 1)"
+        printf 'gitdir: %s\n' "$gitdir" > "$pointer_file"
+        git_mounts+=(--mount "type=bind,src=$pointer_file,dst=$dst/.git,readonly")
+    fi
+}
+add_worktree_metadata "$examples_dir" /workspace
+add_worktree_metadata "$plugin_dir" /opt/verl/sources/verl-hardware-plugin
+add_worktree_metadata "$torchtitan_dir" /opt/verl/sources/torchtitan-neuron
+add_worktree_metadata "$vllm_dir" /opt/verl/sources/vllm-neuron
+for target in "${!git_sources[@]}"; do
+    git_mounts+=(--mount "type=bind,src=${git_sources[$target]},dst=$target")
+done
+
 # Refuse silently reusing a container with a different image or bind mounts.
 configuration=$(printf '%s\n' "$examples_dir" "$plugin_dir" "$torchtitan_dir" \
     "$vllm_dir" "$storage" "$image" ubuntu | sha256sum | cut -d ' ' -f 1)
+if [[ $device_count != 2 ]]; then configuration+="-$device_count-devices"; fi
 image_id=$(docker image inspect --format '{{.Id}}' "$image")
 if docker container inspect "$container" >/dev/null 2>&1; then
     actual_configuration=$(docker inspect --format '{{index .Config.Labels "verl-neuron.dev.configuration"}}' "$container")
@@ -36,9 +69,11 @@ if docker container inspect "$container" >/dev/null 2>&1; then
         exit 1
     fi
 else
+    devices=()
+    for ((i=0; i<device_count; i++)); do devices+=(--device "/dev/neuron$i"); done
     docker create --init --name "$container" \
         --label "verl-neuron.dev.configuration=$configuration" \
-        --device /dev/neuron0 --device /dev/neuron1 --device /dev/infiniband \
+        "${git_mounts[@]}" "${devices[@]}" --device /dev/infiniband \
         --shm-size 16g --ulimit memlock=-1:-1 \
         --mount "type=bind,src=$examples_dir,dst=/workspace" \
         --mount "type=bind,src=$plugin_dir,dst=/opt/verl/sources/verl-hardware-plugin" \
