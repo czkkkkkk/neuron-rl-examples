@@ -22,7 +22,7 @@ ENV UV_PYTHON_INSTALL_DIR=/opt/verl/python \
     VLLM_PLUGINS="" \
     NEURON_LOGICAL_NC_CONFIG=2
 
-# Immutable public source snapshots, matching the local GSM8K validation.
+# Immutable public source snapshots.
 ARG PLUGIN_REVISION=5e5aaee1967e228ce116b303089bd55128859540
 ARG TORCHTITAN_REVISION=4c01242f15d86a724110310847aae77526fe674b
 ARG VLLM_NEURON_REVISION=eb6cb360f7cff6082e22a9437d8ce0ba3891304a
@@ -84,17 +84,3 @@ ENV RAY_DEDUP_LOGS=1 \
 RUN mkdir -p /data /cache /runs \
     && chown ubuntu:ubuntu /data /cache /runs
 USER ubuntu
-
-FROM base AS gsm8k
-WORKDIR /opt/verl/examples/gsm8k
-COPY gsm8k/config/neuron_gsm8k.yaml config/neuron_gsm8k.yaml
-# Vendored from verl 1876b06d0a3e4e71e06230be10af14492ca8a75b.
-COPY gsm8k/prepare_gsm8k.py .
-COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/verl-neuron
-ENV MODEL_DIR=/data/Qwen3-0.6B \
-    DATA_DIR=/data/gsm8k \
-    CONFIG_PATH=/opt/verl/examples/gsm8k/config \
-    CONFIG_NAME=neuron_gsm8k \
-    MODEL_REVISION=c1899de289a04d12100db370d81485cdf75e47ca
-ENTRYPOINT ["/usr/local/bin/verl-neuron"]
-CMD ["gsm8k"]

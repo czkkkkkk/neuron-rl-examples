@@ -1,8 +1,8 @@
 # Shared Docker environment for RL on Neuron
 
-Follow these steps to build your own image, open a development container, and run
-an RL example on Neuron. The environment is shared by the repository's examples;
-[GSM8K](../gsm8k/README.md) is used below as a typical first run.
+Build the shared Neuron and verl image once and use its tag as `BASE_IMAGE`
+when building an [example image](../README.md#examples). The steps below also
+show how to use the base directly for development.
 
 **Host** commands run in your normal SSH terminal on the cluster.
 **Container** commands run in the shell opened by `docker/dev.sh` in step 4.
@@ -30,7 +30,7 @@ ls -l /dev/neuron0 /dev/neuron1 /dev/infiniband
 container. The recipe's hardware check enforces that driver version.
 
 Use the repository root as the working directory for all following host commands.
-The Docker build needs the root `Dockerfile`, `docker/`, and example files.
+The base build takes its inputs from the root `Dockerfile` and `docker/`.
 
 ## 2. Prepare the editable source checkouts
 
@@ -68,7 +68,7 @@ Use ordinary Git clones. Linked Git worktrees need their external Git metadata
 mounted too. For a different directory layout, set the source directory variables
 listed under [Launcher options](#launcher-options) before starting the container.
 
-## 3. Choose your image name and build it
+## 3. Build the shared base
 
 Every user must choose a unique image name on the shared cluster. Replace `alice`
 with your own identifier. Keep this value in the host shell for subsequent steps.
@@ -76,12 +76,13 @@ with your own identifier. Keep this value in the host shell for subsequent steps
 **Host:**
 
 ```bash
-export VERL_DEV_IMAGE=alice-neuron-rl:dev
-docker build --platform linux/amd64 --progress=plain -t "$VERL_DEV_IMAGE" .
+export BASE_IMAGE=alice-neuron-rl:base
+docker build --platform linux/amd64 --progress=plain -t "$BASE_IMAGE" .
+export VERL_DEV_IMAGE="$BASE_IMAGE"
 
 # Confirm the image exists and check its installed package versions.
 docker image inspect "$VERL_DEV_IMAGE" --format '{{.Id}}'
-docker run --rm "$VERL_DEV_IMAGE" check
+docker run --rm "$VERL_DEV_IMAGE" bash -c 'python "$PLUGIN_DIR/scripts/accelerators/neuron/check_neuron_environment.py"'
 ```
 
 Wait for the build to finish successfully before continuing. It installs Python
@@ -106,7 +107,7 @@ This creates and starts a persistent container, then opens Bash inside it. With
 the example image name, it prints:
 
 ```text
-Using container alice-neuron-rl-dev (image alice-neuron-rl:dev).
+Using container alice-neuron-rl-base (image alice-neuron-rl:base).
 ```
 
 If the matching container already exists, the script reuses it and starts it if
@@ -140,65 +141,21 @@ mounts include `.git` and replace the image's snapshots at their editable-instal
 paths. Branches and commits therefore persist in your host clones.
 
 The launcher also passes through `/dev/neuron0`, `/dev/neuron1`, and
-`/dev/infiniband`, with 16 GiB shared memory and unlimited locked memory. This
-provides the four logical NeuronCores used by the GSM8K smoke configuration.
-Coordinate use of these devices on the shared cluster; run one job at a time on
-them.
+`/dev/infiniband`, with 16 GiB shared memory and unlimited locked memory.
+Coordinate use of these devices on the shared cluster.
 
-## 5. Check the environment and run an example
+## 5. Check the environment
 
-Continue in the container shell. GSM8K is a typical first example; other examples
-are listed in the [repository guide](../README.md#examples).
-
-**Container:**
+Run the hardware check inside the container.
 
 ```bash
-verl-neuron check --hardware
-
-# Download Qwen3-0.6B and prepare GSM8K.
-verl-neuron prepare
-
-# Run the default two-step GRPO example.
-verl-neuron gsm8k
-
-# Check immediately after the training command returns.
-echo $?
-# Expected: 0
+python "$PLUGIN_DIR/scripts/accelerators/neuron/check_neuron_environment.py" --hardware
 ```
 
-The first run may spend more than 15 minutes compiling kernels. Look for
-`step:1` and `step:2` metrics in the output and a successful return to the shell.
-The two-step run validates execution, not model quality.
+For training, follow the build and run instructions for [GSM8K](../gsm8k/README.md)
+or [Qwen3.8](../qwen3_8/README.md). Both images inherit the shared base.
 
-`verl-neuron gsm8k` also performs preparation automatically, so subsequent runs
-can call it directly. Downloads, preprocessed data, and compiler caches are reused.
-See the [GSM8K guide](../gsm8k/README.md) for configuration changes and longer
-runs with evaluation.
-
-For later runs, you can launch a command through the container directly from the
-host instead of opening an interactive shell.
-
-**Host, with `VERL_DEV_IMAGE` set:**
-
-```bash
-bash docker/dev.sh verl-neuron gsm8k
-```
-
-## 6. Inspect logs and persistent files
-
-The GSM8K run writes `/runs/<UTC timestamp>/train.log`.
-
-The image enables Ray log deduplication by default (`RAY_DEDUP_LOGS=1`).
-To disable it for debugging, run `RAY_DEDUP_LOGS=0 verl-neuron gsm8k` inside
-the container. Ray still preserves repeated messages from the same source.
-
-**Container, after the run:**
-
-```bash
-ls -lt /runs
-latest_run=$(ls -1dt /runs/*/ | head -n 1)
-tail -n 50 "$latest_run/train.log"
-```
+## 6. Persistent files
 
 The following paths are bind mounts, so files survive container removal:
 
@@ -207,10 +164,6 @@ The following paths are bind mounts, so files survive container removal:
 | `.docker-data/data` | `/data` |
 | `.docker-data/cache` | `/cache` |
 | `.docker-data/runs` | `/runs` |
-
-On the host, read the same log at
-`.docker-data/runs/<UTC timestamp>/train.log`. GSM8K weights and data are stored
-under `.docker-data/data/Qwen3-0.6B/` and `.docker-data/data/gsm8k/`.
 
 Keep cache mount paths inside the container stable: compiled graphs refer to NKI
 binaries by absolute path. `VERL_DEV_STORAGE` changes the storage location on the
@@ -231,7 +184,7 @@ To re-enter it from a new host terminal, set your image name again:
 
 ```bash
 cd /path/to/neuron-rl-examples
-export VERL_DEV_IMAGE=alice-neuron-rl:dev
+export VERL_DEV_IMAGE=alice-neuron-rl:base
 bash docker/dev.sh
 ```
 
@@ -242,10 +195,10 @@ work is finished, use its printed container name.
 
 ```bash
 # Open another shell; exit it to return to the host.
-docker exec -it alice-neuron-rl-dev bash
+docker exec -it alice-neuron-rl-base bash
 
 # Stop your container when no job is running in it.
-docker stop alice-neuron-rl-dev
+docker stop alice-neuron-rl-base
 ```
 
 `bash docker/dev.sh` starts a stopped container again. Python packages installed
@@ -292,13 +245,14 @@ The image and launcher do not include or copy host credentials.
 
 ## Rebuild after changing image dependencies
 
-Source edits in the bind mounts do not need a rebuild. Changes to the Dockerfile
-or installed dependencies do.
+Source edits in the bind mounts take effect directly. After changing the base
+Dockerfile or its installed dependencies, rebuild the base and then any example
+image that uses it.
 
-**Host, from the repository root with `VERL_DEV_IMAGE` set:**
+**Host, from the repository root with `BASE_IMAGE` set:**
 
 ```bash
-docker build --platform linux/amd64 --progress=plain -t "$VERL_DEV_IMAGE" .
+docker build --platform linux/amd64 --progress=plain -t "$BASE_IMAGE" .
 ```
 
 An existing container continues to use its original image. After a changed build,
@@ -306,7 +260,7 @@ the launcher refuses to reuse that container. Either choose a new container name
 
 ```bash
 # Host: replace alice with your own identifier.
-export VERL_DEV_CONTAINER=alice-neuron-rl-dev-v2
+export VERL_DEV_CONTAINER=alice-neuron-rl-base-v2
 bash docker/dev.sh
 ```
 
@@ -320,8 +274,8 @@ Set these variables in the **host** shell before calling `docker/dev.sh`:
 
 | Variable | Default |
 | --- | --- |
-| `VERL_DEV_IMAGE` | Required: your own image name, e.g. `alice-neuron-rl:dev` |
-| `VERL_DEV_CONTAINER` | Derived from the image name, e.g. `alice-neuron-rl-dev` |
+| `VERL_DEV_IMAGE` | Required: your own image name, e.g. `alice-neuron-rl:base` |
+| `VERL_DEV_CONTAINER` | Derived from the image name, e.g. `alice-neuron-rl-base` |
 | `VERL_DEV_STORAGE` | `<examples directory>/.docker-data` |
 | `VERL_DEV_PLUGIN_DIR` | `../upstream-to-verl-hardware-plugin` |
 | `VERL_DEV_TORCHTITAN_DIR` | `../torchtitan-neuron` |
@@ -330,33 +284,9 @@ Set these variables in the **host** shell before calling `docker/dev.sh`:
 Changing mounts or the image requires a new container. `VERL_DEV_IMAGE` has no
 default; the launcher exits with an instruction to set it when it is missing.
 
-## Share or run without local source
+## Run without local source
 
-Share this repository, including `Dockerfile`, `docker/`, and the example files
-referenced by the build (currently the GSM8K configuration and preprocessor).
-All image inputs are public. The build does not copy local checkouts, credentials,
-models, or caches. Source revisions are Docker build arguments, and the complete
-Python package set is in `docker/requirements.lock`.
-
-The built image also runs with its included sources, without any development
-checkouts. For example, run GSM8K with:
-
-**Host, from the repository root with `VERL_DEV_IMAGE` set:**
-
-```bash
-mkdir -p .docker-data/{data,cache,runs}
-docker run --rm --init \
-  --device /dev/neuron0 --device /dev/neuron1 --device /dev/infiniband \
-  --shm-size 16g --ulimit memlock=-1:-1 \
-  --mount "type=bind,src=$PWD/.docker-data/data,dst=/data" \
-  --mount "type=bind,src=$PWD/.docker-data/cache,dst=/cache" \
-  --mount "type=bind,src=$PWD/.docker-data/runs,dst=/runs" \
-  "$VERL_DEV_IMAGE" gsm8k
-```
-
-This command uses the image's included source snapshots. Use `docker/dev.sh`
-when developing against host checkouts. The image's default command is currently
-GSM8K; the development launcher opens a shell by default.
-
-The development image completed the two-step GSM8K run with editable host
-checkouts; see [RESULTS.md](RESULTS.md) for validation details.
+The base image includes the pinned source snapshots. To open a shell using
+those sources, run `docker run --rm -it "$BASE_IMAGE" bash`. Use `docker/dev.sh`
+when developing against host checkouts. The [GSM8K](../gsm8k/README.md) and
+[Qwen3.8](../qwen3_8/README.md) guides cover standalone training.

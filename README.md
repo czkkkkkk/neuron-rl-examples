@@ -13,18 +13,19 @@ launch instructions, and results live in their respective directories.
 
 The [Docker guide](docker/README.md) describes the shared RL environment, host
 requirements, source checkout setup, and development workflow. Choose your own
-unique image name on the shared cluster, then build and open a development shell
-from this repository's root:
+unique base image name on the shared cluster, then build and open a development
+shell from the repository root.
 
 ```bash
-export VERL_DEV_IMAGE=alice-neuron-rl:dev  # Replace alice with your own identifier.
-docker build --platform linux/amd64 -t "$VERL_DEV_IMAGE" .
+export BASE_IMAGE=alice-neuron-rl:base  # Replace alice with your own identifier.
+docker build --platform linux/amd64 -t "$BASE_IMAGE" .
+export VERL_DEV_IMAGE="$BASE_IMAGE"
 bash docker/dev.sh
 ```
 
-`VERL_DEV_IMAGE` is required by the
-launcher; its value also determines the default container name
-(`alice-neuron-rl-dev` in this example).
+Each example below builds its own image with `FROM ${BASE_IMAGE}`. For a
+development shell, `VERL_DEV_IMAGE` selects the image and determines the
+default container name (`alice-neuron-rl-base` above).
 
 The development launcher mounts the sibling `torchtitan-neuron`, `vllm-neuron`,
 and `upstream-to-verl-hardware-plugin` Git checkouts at their editable-install
