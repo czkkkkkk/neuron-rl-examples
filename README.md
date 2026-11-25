@@ -13,18 +13,19 @@ launch instructions, and results live in their respective directories.
 
 The [Docker guide](docker/README.md) describes the shared RL environment, host
 requirements, source checkout setup, and development workflow. Choose your own
-unique image name on the shared cluster, then build and open a development shell
-from this repository's root:
+unique base image name on the shared cluster, then build and open a development
+shell from the repository root.
 
 ```bash
-export VERL_DEV_IMAGE=alice-neuron-rl:dev  # Replace alice with your own identifier.
-docker build --platform linux/amd64 -t "$VERL_DEV_IMAGE" .
+export BASE_IMAGE=alice-neuron-rl:base  # Replace alice with your own identifier.
+docker build --platform linux/amd64 -t "$BASE_IMAGE" .
+export VERL_DEV_IMAGE="$BASE_IMAGE"
 bash docker/dev.sh
 ```
 
-`VERL_DEV_IMAGE` is required by the
-launcher; its value also determines the default container name
-(`alice-neuron-rl-dev` in this example).
+Each example below builds its own image with `FROM ${BASE_IMAGE}`. For a
+development shell, `VERL_DEV_IMAGE` selects the image and determines the
+default container name (`alice-neuron-rl-base` above).
 
 The development launcher mounts the sibling `torchtitan-neuron`, `vllm-neuron`,
 and `upstream-to-verl-hardware-plugin` Git checkouts at their editable-install
@@ -38,6 +39,7 @@ installed inside the Docker image.
 | Example | Model | Method | What it demonstrates |
 | --- | --- | --- | --- |
 | [GSM8K](gsm8k/README.md) | Qwen3-0.6B | GRPO | Math reasoning with generation, rule-based rewards, training, and actor-to-rollout weight synchronization |
+| [Qwen3.8-27B on SDK 2.33.1](qwen3_8/README.md) | Qwen3.8-27B text | GRPO | Three training steps with a full 27B actor and four V2 rollout replicas on one Trn2 |
 
 The GSM8K guide includes a two-step smoke run to verify the environment and
 instructions for a longer run with evaluation.

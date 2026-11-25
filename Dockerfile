@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db
+FROM ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db AS base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ARG TARGETARCH
@@ -22,7 +22,7 @@ ENV UV_PYTHON_INSTALL_DIR=/opt/verl/python \
     VLLM_PLUGINS="" \
     NEURON_LOGICAL_NC_CONFIG=2
 
-# Immutable public source snapshots, matching the local GSM8K validation.
+# Immutable public source snapshots.
 ARG PLUGIN_REVISION=5e5aaee1967e228ce116b303089bd55128859540
 ARG TORCHTITAN_REVISION=4c01242f15d86a724110310847aae77526fe674b
 ARG VLLM_NEURON_REVISION=eb6cb360f7cff6082e22a9437d8ce0ba3891304a
@@ -74,25 +74,13 @@ assert checked, "No native Neuron compiler binaries found"
 print(f"Checked shared libraries for {checked} Neuron compiler binaries.")
 PY
 
-COPY gsm8k/config/neuron_gsm8k.yaml /opt/verl/examples/gsm8k/config/neuron_gsm8k.yaml
-# Vendored from verl 1876b06d0a3e4e71e06230be10af14492ca8a75b.
-COPY gsm8k/prepare_gsm8k.py /opt/verl/examples/gsm8k/prepare_gsm8k.py
-COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/verl-neuron
 ENV RAY_DEDUP_LOGS=1 \
-    MODEL_DIR=/data/Qwen3-0.6B \
-    DATA_DIR=/data/gsm8k \
-    CONFIG_PATH=/opt/verl/examples/gsm8k/config \
-    CONFIG_NAME=neuron_gsm8k \
     HF_HOME=/cache/huggingface \
     XDG_CACHE_HOME=/cache \
     NKI_COMPILE_CACHE_URL=/cache/nki \
     VLLM_CACHE_ROOT=/cache/vllm \
     TORCHINDUCTOR_CACHE_DIR=/cache/torchinductor \
-    PYTHONPYCACHEPREFIX=/cache/pycache \
-    MODEL_REVISION=c1899de289a04d12100db370d81485cdf75e47ca
+    PYTHONPYCACHEPREFIX=/cache/pycache
 RUN mkdir -p /data /cache /runs \
     && chown ubuntu:ubuntu /data /cache /runs
 USER ubuntu
-WORKDIR /opt/verl/examples/gsm8k
-ENTRYPOINT ["/usr/local/bin/verl-neuron"]
-CMD ["gsm8k"]

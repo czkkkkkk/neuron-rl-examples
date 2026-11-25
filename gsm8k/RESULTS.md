@@ -1,6 +1,6 @@
 # Docker validation: 2026-11-16
 
-Built `verl-neuron:2.33` from this Dockerfile and completed the default
+The original `verl-neuron:2.33` image completed the default
 two-step Qwen3-0.6B/GSM8K GRPO run on a `trn2.48xlarge`, with exit code **0**.
 The run used `docker/dev.sh` with all three host Git checkouts mounted as
 editable packages, using the Python environment installed inside the image.

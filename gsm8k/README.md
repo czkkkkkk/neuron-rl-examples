@@ -6,28 +6,55 @@ generation. The example follows the plugin's
 [Neuron recipe](https://github.com/amazon-contributing/upstream-to-verl-hardware-plugin/blob/5e5aaee1967e228ce116b303089bd55128859540/docs/accelerators/neuron/README.md)
 and uses the repository's [shared Docker environment](../docker/README.md).
 
-## Run the example
+## Build the image
 
-Prepare the environment and sibling checkouts using the Docker guide, then set
-your image name and run from the repository root:
+From the repository root, build the shared base and pass its tag to the GSM8K
+Dockerfile. If the base is already built, set `BASE_IMAGE` to its tag and skip
+its build command.
 
 ```bash
-export VERL_DEV_IMAGE=alice-neuron-rl:dev  # Use your own built image.
+export BASE_IMAGE="$USER-neuron-rl:base" VERL_DEV_IMAGE="$USER-neuron-gsm8k:dev"
+docker build --platform linux/amd64 -t "$BASE_IMAGE" .
+docker build --platform linux/amd64 --build-arg BASE_IMAGE="$BASE_IMAGE" -t "$VERL_DEV_IMAGE" gsm8k
+docker run --rm "$VERL_DEV_IMAGE" check
+```
+
+## Run the example
+
+On a Trainium2 host with driver `2.31.7.0` and EFA, run the image with its
+bundled sources. Run from the repository root with `VERL_DEV_IMAGE` set.
+
+```bash
+mkdir -p .docker-data/{data,cache,runs}
+docker run --rm --init \
+  --device /dev/neuron0 --device /dev/neuron1 --device /dev/infiniband \
+  --shm-size 16g --ulimit memlock=-1:-1 \
+  --mount "type=bind,src=$PWD/.docker-data/data,dst=/data" \
+  --mount "type=bind,src=$PWD/.docker-data/cache,dst=/cache" \
+  --mount "type=bind,src=$PWD/.docker-data/runs,dst=/runs" \
+  "$VERL_DEV_IMAGE"
+```
+
+The default command checks the hardware, downloads Qwen3-0.6B at a pinned
+revision, prepares GSM8K, and runs two GRPO steps. Look for `step:1`, `step:2`,
+and exit code 0. This checks generation, rewards, training, and weight synchronization.
+
+For development with editable checkouts, follow the [source checkout setup](../docker/README.md#2-prepare-the-editable-source-checkouts)
+and run the same image with the development launcher.
+
+```bash
 bash docker/dev.sh verl-neuron gsm8k
 ```
 
-Or, with `VERL_DEV_IMAGE` set, open a development shell first:
+To run one stage at a time from a development shell, use
 
 ```bash
 bash docker/dev.sh
-# Inside the container:
+# Inside the container
 verl-neuron check --hardware
+verl-neuron prepare
 verl-neuron gsm8k
 ```
-
-The launcher downloads Qwen3-0.6B at a pinned revision, prepares the GSM8K dataset,
-and runs two GRPO steps by default. This smoke run verifies generation, rewards,
-training, and weight synchronization; it is too short to assess model quality.
 
 ## Configuration
 
@@ -52,7 +79,7 @@ the container. Restart a running job after changing its configuration or code.
 
 ## Data, caches, and results
 
-With the Docker development launcher, artifacts persist on the host:
+Both launch commands store artifacts on the host.
 
 | Artifact | Host location |
 | --- | --- |
@@ -65,5 +92,7 @@ Cold compilation may take more than 15 minutes. Preserve the cache mount paths
 inside the container because compiled graphs reference NKI binaries by absolute
 path.
 
-The [Docker validation results](../docker/RESULTS.md) record the successful
+Set `RAY_DEDUP_LOGS=0` in the container to disable Ray log deduplication while debugging.
+
+The [Docker validation results](RESULTS.md) record the successful
 two-step run with editable host checkouts.

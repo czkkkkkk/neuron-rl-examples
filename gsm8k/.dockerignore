@@ -1,0 +1,6 @@
+**
+!Dockerfile
+!config/
+!config/neuron_gsm8k.yaml
+!prepare_gsm8k.py
+!entrypoint.sh

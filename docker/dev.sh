@@ -47,7 +47,6 @@ else
         --mount "type=bind,src=$storage/data,dst=/data" \
         --mount "type=bind,src=$storage/cache,dst=/cache" \
         --mount "type=bind,src=$storage/runs,dst=/runs" \
-        --env CONFIG_PATH=/workspace/gsm8k/config \
         --workdir /workspace --entrypoint /usr/bin/sleep \
         "$image" infinity >/dev/null
 fi

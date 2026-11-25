@@ -9,7 +9,7 @@ prepare_gsm8k() {
         touch "$MODEL_DIR/.verl-download-$MODEL_REVISION"
     fi
     if [[ ! -f "$DATA_DIR/train.parquet" || ! -f "$DATA_DIR/test.parquet" ]]; then
-        python /opt/verl/examples/gsm8k/prepare_gsm8k.py --local_save_dir "$DATA_DIR"
+        python /workspace/gsm8k/prepare_gsm8k.py --local_save_dir "$DATA_DIR"
     fi
 }
 
