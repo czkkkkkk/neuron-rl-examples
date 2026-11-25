@@ -6,7 +6,7 @@ The recipe uses 16 prompts per batch, two sampled responses per prompt, a 256-to
 
 ## 1. Build the image
 
-Start in this repository's root. Use Docker with BuildKit/buildx for the shared base Dockerfile and network access to the public package indexes and GitHub. Running requires an exclusive Trainium2 host with all 16 Neuron devices, EFA, and loaded Neuron driver **2.31.8.0**. The image supplies user-space libraries; it does not change the host driver.
+Start in this repository's root. Use Docker with BuildKit/buildx for the shared base Dockerfile and network access to the public package indexes and GitHub. Running requires an exclusive Trainium2 host with all 16 Neuron devices, EFA, and loaded Neuron driver **2.31.7.0**. The image supplies the SDK 2.33.1 user-space libraries.
 
 ```bash
 cat /sys/module/neuron/version
@@ -63,7 +63,7 @@ For the pinned configuration, `train.log` must contain three numbered steps with
 python3 qwen3_8/verify_run.py "$WORK_PATH/runs/<run>/train.log"
 ```
 
-The reference run completed all three updates and four policy deliveries. Its mean batch rewards were 0.15625, 0.125 and 0.4375. Those stochastic numbers are examples, not thresholds or a held-out accuracy result.
+On driver `2.31.7.0`, the reference run completed all three updates and four policy deliveries with 32 logical cores for training and 32 for inference. Its mean batch rewards were 0.09375, 0.1875 and 0.25. Rewards vary with sampling.
 
 For a separate greedy-generation check, [check_generation.py](check_generation.py) accepts `hf` (CPU FP32) and `v2` (BF16 TP8). Run the two commands independently on an idle host:
 

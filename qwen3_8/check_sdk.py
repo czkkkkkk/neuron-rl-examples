@@ -47,7 +47,7 @@ if __name__ == "__main__":
     require("GDN backward SHA256", hashlib.sha256(kernel.read_bytes()).hexdigest(),
             "d481f09cf3ef043181ffefff9f1b914b63c2e63d198373b815b92affae75c377")
     if args.hardware:
-        require("neuron driver", Path("/sys/module/neuron/version").read_text().strip(), "2.31.8.0")
+        require("neuron driver", Path("/sys/module/neuron/version").read_text().strip(), "2.31.7.0")
         import torch
         import torch_neuronx  # noqa: F401
 
