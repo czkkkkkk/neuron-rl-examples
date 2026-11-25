@@ -2,7 +2,7 @@
 
 This example trains the full BF16 text decoder on GSM8K. One **trn2.48xlarge** runs both roles: 32 logical NeuronCores train the TorchTitan actor (TP4 × FSDP8), and 32 run four vLLM V2 rollout replicas (TP8 each). No GPU, profiler server, second host, private wheel, or sibling Git checkout is required.
 
-The recipe uses 16 prompts per batch, two sampled responses per prompt, a 256-token prompt limit, a 256-token response limit and three optimizer updates. Each update streams the new actor weights over NIXL to all four rollout replicas. The actor ranks share a host-memory bucket. The complete configuration is in [config/](config).
+The recipe uses 16 prompts per batch, two sampled responses per prompt, a 256-token prompt limit, a 256-token response limit and three optimizer updates. Each update streams the new actor weights over NIXL to all four rollout replicas. The actor ranks share a host-memory bucket. The complete configuration is in [qwen38_grpo.yaml](config/qwen38_grpo.yaml).
 
 ## 1. Build the image
 
