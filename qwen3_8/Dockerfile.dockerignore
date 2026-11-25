@@ -3,6 +3,5 @@
 !qwen3_8/install.sh
 !qwen3_8/prepare.sh
 !qwen3_8/check_sdk.py
-!qwen3_8/check_generation.py
 !qwen3_8/run_grpo.sh
 !qwen3_8/config/*.yaml

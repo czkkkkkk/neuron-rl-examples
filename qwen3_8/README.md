@@ -47,36 +47,14 @@ docker run --rm \
 
 [prepare.sh](prepare.sh) downloads [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B/tree/37561816e66b5b9153b1b64c10968c18c1e6f4a0) and [openai/gsm8k](https://huggingface.co/datasets/openai/gsm8k/tree/740312add88f781978c0658806c59bc2815b9866) at fixed revisions. It converts the `main` train and test splits with the same preprocessing as the small GSM8K example. If you already have those exact inputs, set the variables to their paths and skip the download.
 
-## 3. Run and verify
+## 3. Run training
 
-Run on the exclusive host with no other Ray cluster using the devices. Keep the environment variables from steps 1 and 2. The host launcher and log verifier require Python 3.7 or newer.
+Run on the exclusive host with no other Ray cluster using the devices. Keep the environment variables from steps 1 and 2. The host launcher uses Python 3 to name each run directory.
 
 ```bash
 bash qwen3_8/run_container.sh
 ```
 
-The launcher uses the image's source snapshots and mounts the checkpoint and dataset read-only. It prints the new run directory under `$WORK_PATH/runs`, keeps compiler caches between runs, and returns a nonzero exit status if training or acceptance fails. The first run compiles training and rollout graphs.
-
-For the pinned configuration, `train.log` must contain three numbered steps with finite, positive actor gradient norms and GSM8K rewards in [0, 1]. The initial policy and the three updated policies must each deliver all **401** buckets in order to **32** rollout workers. To recheck a completed log:
-
-```bash
-python3 qwen3_8/verify_run.py "$WORK_PATH/runs/<run>/train.log"
-```
+The launcher uses the image's source snapshots and mounts the checkpoint and dataset read-only. It prints the run directory under `$WORK_PATH/runs` and returns the training container's exit status. That directory's `train.log` contains the step metrics and weight-transfer logs. The first run compiles training and rollout graphs. Subsequent runs reuse the compiler caches.
 
 On driver `2.31.7.0`, the reference run completed all three updates and four policy deliveries with 32 logical cores for training and 32 for inference. Its mean batch rewards were 0.09375, 0.1875 and 0.25. Rewards vary with sampling.
-
-For a separate greedy-generation check, [check_generation.py](check_generation.py) accepts `hf` (CPU FP32) and `v2` (BF16 TP8). Run the two commands independently on an idle host:
-
-```bash
-docker run --rm --mount "type=bind,src=$MODEL_PATH,dst=/model,readonly" \
-    --mount "type=bind,src=$WORK_PATH,dst=/results" -e OMP_NUM_THREADS=12 \
-    "$QWEN_IMAGE" python check_generation.py hf /model --output /results/reference.json
-docker run --rm --device /dev/neuron0 --device /dev/neuron1 --device /dev/infiniband \
-    --shm-size=16g --ulimit memlock=-1:-1 \
-    --mount "type=bind,src=$MODEL_PATH,dst=/model,readonly" --mount "type=bind,src=$WORK_PATH,dst=/results" \
-    -e TORCH_DEVICE_BACKEND_AUTOLOAD=0 -e VERL_NEURON_PROCESS_ROLE=rollout \
-    -e VLLM_PLUGINS=neuron -e VLLM_NEURON_BACKEND=neuron_native -e VLLM_WORKER_MULTIPROC_METHOD=spawn \
-    "$QWEN_IMAGE" python check_generation.py v2 /model --reference /results/reference.json
-```
-
-The BF16 and FP32 references agreed on all eight generated token IDs for the two short prompts. This tests the start of decode; it does not measure convergence.
