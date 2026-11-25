@@ -12,14 +12,16 @@ Start in this repository's root. Use Docker with BuildKit/buildx for the shared 
 cat /sys/module/neuron/version
 ls /dev/neuron{0..15} /dev/infiniband
 export BASE_IMAGE="$USER-neuron-rl:base" QWEN_IMAGE="$USER-qwen38-grpo:2.33.1"
-docker build --platform linux/amd64 -t "$BASE_IMAGE" .
-docker build --platform linux/amd64 --build-arg RL_BASE_IMAGE="$BASE_IMAGE" \
-    -t "$QWEN_IMAGE" qwen3_8/
+docker build --platform linux/amd64 --target base -t "$BASE_IMAGE" .
+docker build --platform linux/amd64 --build-arg BASE_IMAGE="$BASE_IMAGE" \
+    -f qwen3_8/Dockerfile -t "$QWEN_IMAGE" .
 docker run --rm --device /dev/neuron0 "$QWEN_IMAGE"  # SDK pins, driver and a tensor addition
 docker run --rm "$QWEN_IMAGE" cat /opt/verl/qwen38-revisions.txt
 ```
 
-The application uses verl 0.9.1, Transformers 5.10.4, vLLM 0.29.0 and vLLM-Neuron 0.29.0.1.2.0. The [Dockerfile](Dockerfile) fetches exact public source revisions; install them together because the stock SDK packages lack this combination:
+The [root Dockerfile](../Dockerfile) supplies Python, EFA and the shared RL packages, including verl 0.9.1, Transformers 5.10.4 and vLLM 0.29.0. If you already built its `base` target, set `BASE_IMAGE` to that tag and run just the Qwen build.
+
+The Qwen image installs the SDK 2.33.1 runtime, collectives and `libtorch-neuronx-lite` updates. It includes the shared GSM8K preprocessing script and pins the following sources, including vLLM-Neuron 0.29.0.1.2.0.
 
 | Component | Revision | What it provides |
 | --- | --- | --- |

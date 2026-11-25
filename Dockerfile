@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db
+FROM ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db AS base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ARG TARGETARCH
@@ -74,25 +74,27 @@ assert checked, "No native Neuron compiler binaries found"
 print(f"Checked shared libraries for {checked} Neuron compiler binaries.")
 PY
 
-COPY gsm8k/config/neuron_gsm8k.yaml /opt/verl/examples/gsm8k/config/neuron_gsm8k.yaml
-# Vendored from verl 1876b06d0a3e4e71e06230be10af14492ca8a75b.
-COPY gsm8k/prepare_gsm8k.py /opt/verl/examples/gsm8k/prepare_gsm8k.py
-COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/verl-neuron
 ENV RAY_DEDUP_LOGS=1 \
-    MODEL_DIR=/data/Qwen3-0.6B \
-    DATA_DIR=/data/gsm8k \
-    CONFIG_PATH=/opt/verl/examples/gsm8k/config \
-    CONFIG_NAME=neuron_gsm8k \
     HF_HOME=/cache/huggingface \
     XDG_CACHE_HOME=/cache \
     NKI_COMPILE_CACHE_URL=/cache/nki \
     VLLM_CACHE_ROOT=/cache/vllm \
     TORCHINDUCTOR_CACHE_DIR=/cache/torchinductor \
-    PYTHONPYCACHEPREFIX=/cache/pycache \
-    MODEL_REVISION=c1899de289a04d12100db370d81485cdf75e47ca
+    PYTHONPYCACHEPREFIX=/cache/pycache
 RUN mkdir -p /data /cache /runs \
     && chown ubuntu:ubuntu /data /cache /runs
 USER ubuntu
+
+FROM base AS gsm8k
 WORKDIR /opt/verl/examples/gsm8k
+COPY gsm8k/config/neuron_gsm8k.yaml config/neuron_gsm8k.yaml
+# Vendored from verl 1876b06d0a3e4e71e06230be10af14492ca8a75b.
+COPY gsm8k/prepare_gsm8k.py .
+COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/verl-neuron
+ENV MODEL_DIR=/data/Qwen3-0.6B \
+    DATA_DIR=/data/gsm8k \
+    CONFIG_PATH=/opt/verl/examples/gsm8k/config \
+    CONFIG_NAME=neuron_gsm8k \
+    MODEL_REVISION=c1899de289a04d12100db370d81485cdf75e47ca
 ENTRYPOINT ["/usr/local/bin/verl-neuron"]
 CMD ["gsm8k"]
