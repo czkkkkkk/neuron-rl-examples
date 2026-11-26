@@ -44,6 +44,8 @@ installed inside the Docker image.
 The GSM8K guide includes a two-step smoke run to verify the environment and
 instructions for a longer run with evaluation.
 
+The standalone text-training benchmark compares TP, CP and DP sharding on 64 logical NeuronCores. [Qwen3.8 benchmark](benchmarks/training/README.md)
+
 ## Repository layout
 
 - [Dockerfile](Dockerfile) and [docker/](docker/README.md): shared environment,

@@ -7,6 +7,15 @@ show how to use the base directly for development.
 **Host** commands run in your normal SSH terminal on the cluster.
 **Container** commands run in the shell opened by `docker/dev.sh` in step 4.
 
+## Develop in linked worktrees
+
+Run `docker/dev.sh` from the examples worktree and set `VERL_DEV_TORCHTITAN_DIR`
+to the TorchTitan-Neuron worktree. The launcher mounts both source trees and
+Git metadata for linked worktrees. Give this combination a distinct
+`VERL_DEV_CONTAINER` name. Set `VERL_DEV_STORAGE` to the existing `.docker-data`
+directory to reuse the model and compiler caches. `VERL_DEV_NEURON_DEVICE_COUNT`
+selects how many Trainium devices to mount, starting at device zero (default 2).
+
 ## 1. Check the host and enter the repository
 
 Running the examples requires a Linux Trainium2 host with Docker, Neuron driver
@@ -64,8 +73,8 @@ The two Neuron backend clones come from the `czkkkkkk` forks. The pinned commits
 above match the validated environment; create development branches from them
 when needed. The launcher never checks out commits or changes branches.
 
-Use ordinary Git clones. Linked Git worktrees need their external Git metadata
-mounted too. For a different directory layout, set the source directory variables
+The launcher supports ordinary clones and linked worktrees. For a different
+directory layout, set the source directory variables
 listed under [Launcher options](#launcher-options) before starting the container.
 
 ## 3. Build the shared base
@@ -277,6 +286,7 @@ Set these variables in the **host** shell before calling `docker/dev.sh`:
 | `VERL_DEV_IMAGE` | Required: your own image name, e.g. `alice-neuron-rl:base` |
 | `VERL_DEV_CONTAINER` | Derived from the image name, e.g. `alice-neuron-rl-base` |
 | `VERL_DEV_STORAGE` | `<examples directory>/.docker-data` |
+| `VERL_DEV_NEURON_DEVICE_COUNT` | `2` |
 | `VERL_DEV_PLUGIN_DIR` | `../upstream-to-verl-hardware-plugin` |
 | `VERL_DEV_TORCHTITAN_DIR` | `../torchtitan-neuron` |
 | `VERL_DEV_VLLM_DIR` | `../vllm-neuron` |
